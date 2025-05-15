@@ -1,18 +1,27 @@
+use std::sync::Arc;
+
 use ezsockets::ClientConfig;
 
-use crate::{constant, socket::{frame_socket::FrameSocket, noise_socket::NoiseSocket}};
+use crate::{constant, device::Device, socket::{frame_socket::FrameSocket, noise_socket::NoiseSocket}, util::key::Key};
 
-#[derive(Default)]
 pub struct Client {
+    pub device: Device,
     ns: Option<NoiseSocket>,
 }
 
 impl Client {
-    pub async fn connect(&self)  {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            device: Device::new(),
+            ns: None
+        })
+    }
+
+    pub async fn connect(self: &Arc<Self>)  {
+        let client = Arc::clone(self);
         let config = ClientConfig::new(constant::WS_URL).header("Origin", constant::ORIGIN);
-        let (_, future) = ezsockets::connect(|handle| FrameSocket {
-            handle: Some(handle),
-            ..Default::default()
+        let (_, future) = ezsockets::connect(move |handle| {
+            FrameSocket::new(handle, Arc::clone(&client))
         }, config).await;
         tokio::spawn(async move {
             future.await.unwrap();
