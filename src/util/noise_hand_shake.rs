@@ -1,9 +1,9 @@
 use aes_gcm::{aead::{Aead, Payload}, Aes256Gcm, Nonce};
-use curve25519_dalek::{MontgomeryPoint, Scalar};
 use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
+use x25519_dalek::{PublicKey, StaticSecret};
 
-use crate::constant;
+use crate::{constant};
 
 use super::gcm;
 
@@ -38,12 +38,11 @@ impl NoiseHandShake {
         hasher.update(data);
         hasher.finalize().to_vec()
     }
-
     pub fn mix_shared_secret(&mut self, private_key: [u8; 32], public_key: [u8; 32]) {
-        let scalar = Scalar::from_bytes_mod_order(private_key);
-        let point = MontgomeryPoint(public_key);
-        let shared_secret = scalar * point;
-        self.mix_into_key(&shared_secret.to_bytes());
+        let secret = StaticSecret::from(private_key);
+        let public = PublicKey::from(public_key);
+        let shared_secret = secret.diffie_hellman(&public);
+        self.mix_into_key(shared_secret.as_bytes());
     }
 
     pub fn decrypt(&mut self, cipher: &[u8]) -> Vec<u8> {
@@ -75,12 +74,11 @@ impl NoiseHandShake {
         let hk = Hkdf::<Sha256>::new(Some(&self.salt), data);
         let mut okm = [0u8; 64];
         hk.expand(&[], &mut okm).expect("HKDF expand failed");
-    
-        let (new_salt, new_key) = okm.split_at(32);
-        self.salt = new_salt.to_vec();
-        self.key = Some(gcm::prepare(new_key.to_vec()));
+
+        let (write, read) = okm.split_at(32);
+        self.salt = write.to_vec();
+        self.key = Some(gcm::prepare(read.to_vec()));
     }
-    
 
     pub fn generate_iv(counter: u32) -> [u8; 12] {
         let mut iv = [0u8; 12];

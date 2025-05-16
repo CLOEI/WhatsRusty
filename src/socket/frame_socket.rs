@@ -3,9 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use prost::Message;
 
-use crate::{client::Client, constant, proto::whatsapp::{client_payload::{user_agent::AppVersion, DevicePairingRegistrationData, UserAgent, WebInfo}, handshake_message::{ClientFinish, ClientHello}, ClientPayload, HandshakeMessage}, util::{key::Key, noise_hand_shake::NoiseHandShake}};
+use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, util::{key::Key, noise_hand_shake::NoiseHandShake}};
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub enum FrameSocketState {
     #[default]
     HANDSHAKE,
@@ -38,12 +38,16 @@ impl FrameSocket {
         }
 
         let mut frame = Vec::with_capacity(header_length + constant::FRAME_LENGTH_SIZE + data_length);
-        frame.extend_from_slice(&constant::CONN_HEADER);
+        if self.state == FrameSocketState::HANDSHAKE {
+            frame.extend_from_slice(&constant::CONN_HEADER);
+        }
         frame.push((data_length >> 16) as u8);
         frame.push((data_length >> 8) as u8);
         frame.push(data_length as u8);
         frame.extend_from_slice(&data);
 
+        println!("Frame length: {}", frame.len());
+        println!("Frame: {:?}", frame);
         self.handle.binary(frame).expect("Fail sending frame");
     }
 
@@ -74,7 +78,7 @@ impl ezsockets::ClientExt for FrameSocket {
     }
 
     async fn on_binary(&mut self, bytes: ezsockets::Bytes) -> Result<(), ezsockets::Error> {
-        // println!("Received bytes {:?}", bytes);
+        println!("Received bytes {:?}", bytes);
         let data = self.process_data(bytes.to_vec());
         match self.state {
             FrameSocketState::HANDSHAKE => {
@@ -90,22 +94,26 @@ impl ezsockets::ClientExt for FrameSocket {
                 
                 nhs.authenticate(server_ephemeral.clone());
                 nhs.mix_shared_secret(self.key.private, server_ephemeral.clone().try_into().unwrap());
+
                 let static_decrypted = nhs.decrypt(&server_static_cipher_text);
-                nhs.mix_shared_secret(self.key.private, static_decrypted.try_into().unwrap());
-                let cert_decrypted = nhs.decrypt(&certificate_cipher_text);
-                let encrypted_pubkey = nhs.encrypt(&cert_decrypted);
+                nhs.mix_shared_secret(self.key.private, static_decrypted.clone().try_into().unwrap());
+
+                nhs.decrypt(&certificate_cipher_text);
+
+                let encrypted_pubkey = nhs.encrypt(&self.client.device.noise_key.public.to_vec());
                 nhs.mix_shared_secret(self.client.device.noise_key.private, server_ephemeral.try_into().unwrap());
 
                 let reg_id: [u8; 4] = self.client.device.registration_id.to_be_bytes();
-                let pre_key_id: [u8; 4] = self.client.device.signed_pre_key.key_id.to_be_bytes();
+                let pre_key_id: [u8; 4] = self.client.device.signed_pre_key.id.to_be_bytes();
 
                 let client_payload = ClientPayload {
                     user_agent: Some(UserAgent {
-                        platform: Some(14),
+                        platform: Some(user_agent::Platform::Web.into()),
+                        release_channel: Some(user_agent::ReleaseChannel::Release.into()),
                         app_version: Some(AppVersion {
                             primary: Some(2),
-                            secondary: Some(2413),
-                            tertiary: Some(51),
+                            secondary: Some(3000),
+                            tertiary: Some(1022419966),
                             ..Default::default()
                         }),
                         mcc: Some("000".to_string()),
@@ -115,28 +123,55 @@ impl ezsockets::ClientExt for FrameSocket {
                         device: Some("Desktop".to_string()),
                         os_build_number: Some("0.1.0".to_string()),
                         locale_language_iso6391: Some("en".to_string()),
-                        locale_country_iso31661_alpha2: Some("en".to_string())
-                    }),
-                    web_info: Some(WebInfo {
-                        web_sub_platform: Some(0),
+                        locale_country_iso31661_alpha2: Some("en".to_string()),
                         ..Default::default()
                     }),
-                    connect_type: Some(1),
-                    connect_reason: Some(1),
+                    web_info: Some(WebInfo {
+                        web_sub_platform: Some(web_info::WebSubPlatform::WebBrowser.into()),
+                        ..Default::default()
+                    }),
+                    connect_type: Some(client_payload::ConnectType::WifiUnknown.into()),
+                    connect_reason: Some(client_payload::ConnectReason::UserActivated.into()),
                     device_pairing_data: Some(DevicePairingRegistrationData {
-
-                    })
+                        e_regid: Some(reg_id.to_vec()),
+                        e_keytype: Some(vec![0x05]),
+                        e_ident: Some(self.client.device.identity_key.public.to_vec()),
+                        e_skey_id: Some(pre_key_id[1..].to_vec()),
+                        e_skey_val: Some(self.client.device.signed_pre_key.key.public.to_vec()),
+                        e_skey_sig: Some(self.client.device.signed_pre_key.signature.to_vec()),
+                        build_hash: Some(calculate_wa_version_hash().to_vec()),
+                        device_props: Some(DeviceProps {
+                            os: Some("WhatsRusty".to_string()),
+                            version: Some(device_props::AppVersion {
+                                primary: Some(0),
+                                secondary: Some(1),
+                                tertiary: Some(0),
+                                ..Default::default()
+                            }),
+                            platform_type: Some(0),
+                            require_full_sync: Some(false),
+                            ..Default::default()
+                        }.encode_to_vec()),
+                        ..Default::default()
+                    }),
+                    passive: Some(false),
+                    pull: Some(false),
+                    ..Default::default()
                 };
+
+                let encrypted_client_payload = nhs.encrypt(&client_payload.encode_to_vec());
 
                 let client_finish = HandshakeMessage {
                     client_finish: Some(ClientFinish {
-                        payload: None,
+                        payload: Some(encrypted_client_payload),
                         r#static: Some(encrypted_pubkey),
                     }),
                     ..Default::default()
                 };
-
+                
                 self.state = FrameSocketState::CONNECTED;
+                self.send_frame(client_finish.encode_to_vec());
+                
             },
             FrameSocketState::CONNECTED => {}
         }
@@ -157,4 +192,10 @@ impl ezsockets::ClientExt for FrameSocket {
         }
         Ok(())
     }
+}
+
+fn calculate_wa_version_hash() -> [u8; 16] {
+    let version = "2.3000.1022419966";
+    let digest = md5::compute(version.as_bytes());
+    digest.into()
 }

@@ -6,7 +6,7 @@ use crate::{constant, device::Device, socket::{frame_socket::FrameSocket, noise_
 
 pub struct Client {
     pub device: Device,
-    ns: Option<NoiseSocket>,
+    pub ns: Option<NoiseSocket>,
 }
 
 impl Client {
