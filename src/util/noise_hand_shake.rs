@@ -3,7 +3,7 @@ use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
 use x25519_dalek::{PublicKey, StaticSecret};
 
-use crate::{constant};
+use crate::{constant, socket::noise_socket::NoiseSocket};
 
 use super::gcm;
 
@@ -47,7 +47,7 @@ impl NoiseHandShake {
 
     pub fn decrypt(&mut self, cipher: &[u8]) -> Vec<u8> {
         self.counter += 1; 
-        let iv = NoiseHandShake::generate_iv(self.counter - 1);
+        let iv = NoiseSocket::generate_iv(self.counter - 1);
         let nonce = Nonce::from_slice(&iv);
         let plaintext = self.key.as_ref().unwrap().decrypt(nonce, Payload {
             msg: cipher,
@@ -59,7 +59,7 @@ impl NoiseHandShake {
 
     pub fn encrypt(&mut self, plaintext: &[u8]) -> Vec<u8> {
         self.counter += 1; 
-        let iv = NoiseHandShake::generate_iv(self.counter - 1);
+        let iv = NoiseSocket::generate_iv(self.counter - 1);
         let nonce = Nonce::from_slice(&iv);
         let ciphertext = self.key.as_ref().unwrap().encrypt(nonce, Payload {
             msg: plaintext,
@@ -71,21 +71,19 @@ impl NoiseHandShake {
 
     fn mix_into_key(&mut self, data: &[u8]) {
         self.counter = 0;
-        let hk = Hkdf::<Sha256>::new(Some(&self.salt), data);
-        let mut okm = [0u8; 64];
-        hk.expand(&[], &mut okm).expect("HKDF expand failed");
-
-        let (write, read) = okm.split_at(32);
+        let (write, read) = self.extract_and_expand(Some(data));
+        
         self.salt = write.to_vec();
         self.key = Some(gcm::prepare(read.to_vec()));
     }
 
-    pub fn generate_iv(counter: u32) -> [u8; 12] {
-        let mut iv = [0u8; 12];
-        iv[8] = (counter >> 24) as u8;
-        iv[9] = (counter >> 16) as u8;
-        iv[10] = (counter >> 8) as u8;
-        iv[11] = counter as u8;
-        iv
+    pub fn extract_and_expand(&self, data: Option<&[u8]>) -> (Vec<u8>, Vec<u8>) {
+        let hk = Hkdf::<Sha256>::new(Some(&self.salt), data.unwrap_or(&[]));
+        let mut okm = [0u8; 64];
+        hk.expand(&[], &mut okm).expect("HKDF expand failed");
+
+        let (write, read) = okm.split_at(32);
+        (write.to_vec(), read.to_vec())
     }
+    
 }

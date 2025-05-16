@@ -6,14 +6,12 @@ use crate::{constant, device::Device, socket::{frame_socket::FrameSocket, noise_
 
 pub struct Client {
     pub device: Device,
-    pub ns: Option<NoiseSocket>,
 }
 
 impl Client {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             device: Device::new(),
-            ns: None
         })
     }
 

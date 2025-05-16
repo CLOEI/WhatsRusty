@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use prost::Message;
 
-use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, util::{key::Key, noise_hand_shake::NoiseHandShake}};
+use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, socket::noise_socket::NoiseSocket, util::{gcm, key::Key, noise_hand_shake::NoiseHandShake}};
 
 #[derive(Default, PartialEq)]
 pub enum FrameSocketState {
@@ -16,7 +16,8 @@ pub struct FrameSocket {
     pub handle: ezsockets::Client<Self>,
     pub state: FrameSocketState,
     pub key: Key,
-    pub client: Arc<Client>
+    pub client: Arc<Client>,
+    pub ns: Option<NoiseSocket>
 }
 
 impl FrameSocket {
@@ -25,7 +26,8 @@ impl FrameSocket {
             handle,
             state: FrameSocketState::HANDSHAKE,
             key: Key::new(),
-            client
+            client,
+            ns: None
         }
     }
 
@@ -78,7 +80,7 @@ impl ezsockets::ClientExt for FrameSocket {
     }
 
     async fn on_binary(&mut self, bytes: ezsockets::Bytes) -> Result<(), ezsockets::Error> {
-        println!("Received bytes {:?}", bytes);
+        // println!("Received bytes {:?}", bytes);
         let data = self.process_data(bytes.to_vec());
         match self.state {
             FrameSocketState::HANDSHAKE => {
@@ -171,9 +173,14 @@ impl ezsockets::ClientExt for FrameSocket {
                 
                 self.state = FrameSocketState::CONNECTED;
                 self.send_frame(client_finish.encode_to_vec());
-                
+                let (write_key, read_key) = nhs.extract_and_expand(None);
+                let write_key = gcm::prepare(write_key);
+                let read_key = gcm::prepare(read_key);
+                self.ns = Some(NoiseSocket::new(write_key, read_key));
             },
-            FrameSocketState::CONNECTED => {}
+            FrameSocketState::CONNECTED => {
+                self.ns.as_mut().unwrap().receive_encrypted_frame(&data);
+            }
         }
         Ok(())
     }
