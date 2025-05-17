@@ -19,6 +19,7 @@ libsignal-protocol = { git = "https://github.com/signalapp/libsignal-client", br
 md5 = "0.7.0"
 x25519-dalek = "2.0.1"
 flate2 = "1.1.1"
+byteorder = "1"
 
 [build-dependencies]
 tonic-build = "0.13.1"
