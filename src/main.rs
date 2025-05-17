@@ -6,6 +6,7 @@ mod socket;
 mod constant;
 mod util;
 mod device;
+mod r#type;
 
 #[tokio::main]
 async fn main() {

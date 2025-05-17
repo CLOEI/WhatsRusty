@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use prost::Message;
 
-use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, socket::noise_socket::NoiseSocket, util::{gcm, key::Key, noise_hand_shake::NoiseHandShake}};
+use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, socket::noise_socket::NoiseSocket, util::{binary, gcm, key::Key, noise_hand_shake::NoiseHandShake}};
 
 #[derive(Default, PartialEq)]
 pub enum FrameSocketState {
@@ -179,7 +179,8 @@ impl ezsockets::ClientExt for FrameSocket {
                 self.ns = Some(NoiseSocket::new(write_key, read_key));
             },
             FrameSocketState::CONNECTED => {
-                self.ns.as_mut().unwrap().receive_encrypted_frame(&data);
+                let decrypted = self.ns.as_mut().unwrap().receive_encrypted_frame(&data);
+                let unpacked = binary::unpack(decrypted);
             }
         }
         Ok(())

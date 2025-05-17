@@ -15,7 +15,7 @@ impl NoiseSocket {
         }
     }
 
-    pub fn receive_encrypted_frame(&mut self, ciphertext: &[u8]) {
+    pub fn receive_encrypted_frame(&mut self, ciphertext: &[u8]) -> Vec<u8> {
         let counter = self.read_counter;
         self.read_counter += 1;
 
@@ -27,10 +27,11 @@ impl NoiseSocket {
             aad: b"",
         }) {
             Ok(plaintext) => {
-                println!("Decrypted frame: {:?}", plaintext);
+                plaintext
             }
             Err(e) => {
                 eprintln!("Failed to decrypt frame: {:?}", e);
+                panic!("Failed to decrypt frame");
             }
         }
     }

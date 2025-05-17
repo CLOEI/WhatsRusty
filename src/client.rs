@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ezsockets::ClientConfig;
 
-use crate::{constant, device::Device, socket::{frame_socket::FrameSocket, noise_socket::NoiseSocket}, util::key::Key};
+use crate::{constant, device::Device, socket::{frame_socket::FrameSocket}};
 
 pub struct Client {
     pub device: Device,
