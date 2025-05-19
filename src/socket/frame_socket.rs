@@ -181,7 +181,7 @@ impl ezsockets::ClientExt for FrameSocket {
             FrameSocketState::CONNECTED => {
                 let decrypted = self.ns.as_mut().unwrap().receive_encrypted_frame(&data);
                 let node = BinaryDecoder::new(decrypted).decode();
-                println!("Node: {:?}", node);
+                println!("Node: {}", node.to_xml());
             }
         }
         Ok(())

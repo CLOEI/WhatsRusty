@@ -6,6 +6,7 @@ use flate2::read::ZlibDecoder;
 use crate::{r#type::jid::JID, util::token::{DICTIONARY_0, DICTIONARY_3, DOUBLE_BYTE_TOKENS, SINGLE_BYTE_TOKENS}};
 
 use super::token::{BINARY_20, BINARY_32, BINARY_8, HEX_8, JID_PAIR, LIST_16, LIST_8, LIST_EMPTY, NIBBLE_8};
+use base64::{engine::general_purpose, Engine};
 
 #[derive(Debug, Clone)]
 pub enum Value {

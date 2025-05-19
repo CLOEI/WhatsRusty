@@ -13,6 +13,7 @@ dependencies = [
  "ed25519-dalek",
  "ezsockets",
  "flate2",
+ "hex",
  "hkdf",
  "libsignal-protocol",
  "md5",
