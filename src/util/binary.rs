@@ -26,7 +26,6 @@ pub struct Node {
 
 pub struct BinaryDecoder {
     reader: Cursor<Vec<u8>>,
-    closed: bool,
 }
 
 impl Node {
@@ -45,14 +44,10 @@ impl BinaryDecoder {
         };
         Self {
             reader: Cursor::new(data),
-            closed: false,
         }
     }
 
     pub fn decode(&mut self) -> Node {
-        if self.closed {
-            panic!("Decoder closed")
-        }
         let token = self.reader.read_u8().unwrap();
         let size = self.read_size(token);
         if size == 0 {
@@ -71,7 +66,6 @@ impl BinaryDecoder {
     }
 
     fn read_size(&mut self, token: u8) -> usize {
-        println!("Token: {}", token);
         match token {
             LIST_8 => self.reader.read_u8().unwrap() as usize,
             LIST_16 => self.reader.read_u16::<BigEndian>().unwrap() as usize,
@@ -92,13 +86,14 @@ impl BinaryDecoder {
     fn read_string(&mut self) -> String {
         match self.read(true) {
             Value::Str(s) => s,
+            Value::Null => "".to_string(),
             _ => panic!("Expected string"),
         }
     }
 
     fn read(&mut self, parse_bytes: bool) -> Value {
         let tag = self.reader.read_u8().unwrap();
-        println!("Tag: {}", tag);
+
         match tag {
             LIST_EMPTY => Value::Null,
             JID_PAIR => self.read_jid_pair(),
@@ -124,7 +119,7 @@ impl BinaryDecoder {
                 self.read_binary(size, parse_bytes)
             }
             NIBBLE_8 => self.read_nibble(),
-            token => self.read_string_from_token(token),
+            _ => self.read_string_from_token(tag),
         }
     }
 
@@ -155,7 +150,9 @@ impl BinaryDecoder {
 
     fn read_jid_pair(&mut self) -> Value {
         let user = self.read_string();
+        println!("User: {}", user);
         let server = self.read_string();
+        println!("Server: {}", server);
         Value::Jid(JID {
             user: Some(user),
             server: Some(server),
@@ -179,30 +176,14 @@ impl BinaryDecoder {
         Value::Str(hex.iter().map(|b| format!("{:02x}", b)).collect())
     }
 
-    fn read_string_from_token(&mut self, token: u8) -> Value {
-        if token < DICTIONARY_0 || token > DICTIONARY_3 {
-            if let Some(s) = SINGLE_BYTE_TOKENS.get((token as usize).wrapping_sub(1)) {
-                println!("Single byte token: {}", s);
-                return Value::Str(s.to_string());
-            }
-            panic!("Unknown single byte token: {}", token);
+    fn read_string_from_token(&mut self, tag: u8) -> Value {
+        if tag < DICTIONARY_0 || tag > DICTIONARY_3 {
+            return Value::Str(SINGLE_BYTE_TOKENS[tag as usize].to_string());
         }
 
-        let delta = (DOUBLE_BYTE_TOKENS.len() / 4) * (token as usize - DICTIONARY_0 as usize);
-        let index = self.reader.read_u8().unwrap() as usize + delta;
-        
-        if let Some(row) = DOUBLE_BYTE_TOKENS.get(delta / (DOUBLE_BYTE_TOKENS.len() / 4)) {
-            if let Some(s) = row.get(index % row.len()) {
-                return Value::Str(s.to_string());
-            }
-        }
-        panic!("Unknown double byte token: {} at delta {}", token, delta);
+        let i = self.reader.read_u8().unwrap() as usize;
+        return Value::Str(DOUBLE_BYTE_TOKENS[tag as usize - DICTIONARY_0 as usize][i].to_string());
     }
-
-    pub fn close(&mut self) {
-        self.closed = true;
-    }
-
 }
 
 
