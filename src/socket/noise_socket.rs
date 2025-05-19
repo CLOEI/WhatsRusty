@@ -1,4 +1,5 @@
 use aes_gcm::{aead::Aead, Aes256Gcm, Nonce};
+use paris::error;
 
 pub struct NoiseSocket {
     pub write_key: Aes256Gcm,
@@ -30,7 +31,7 @@ impl NoiseSocket {
                 plaintext
             }
             Err(e) => {
-                eprintln!("Failed to decrypt frame: {:?}", e);
+                error!("Failed to decrypt frame: {:?}", e);
                 panic!("Failed to decrypt frame");
             }
         }

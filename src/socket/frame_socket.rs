@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{sync::Arc};
 
 use async_trait::async_trait;
+use paris::{error, info};
 use prost::Message;
 
-use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, socket::noise_socket::NoiseSocket, util::{binary::{self, BinaryDecoder}, gcm, key::Key, noise_hand_shake::NoiseHandShake}};
+use crate::{client::Client, constant, proto::whatsapp::{client_payload::{self, user_agent::{self, AppVersion}, web_info, DevicePairingRegistrationData, UserAgent, WebInfo}, device_props, handshake_message::{ClientFinish, ClientHello}, ClientPayload, DeviceProps, HandshakeMessage}, socket::noise_socket::NoiseSocket, util::{binary::{self, BinaryDecoder, Node}, gcm, key::Key, noise_hand_shake::NoiseHandShake}};
 
 #[derive(Default, PartialEq)]
 pub enum FrameSocketState {
@@ -17,7 +18,7 @@ pub struct FrameSocket {
     pub state: FrameSocketState,
     pub key: Key,
     pub client: Arc<Client>,
-    pub ns: Option<NoiseSocket>
+    pub ns: Option<NoiseSocket>,
 }
 
 impl FrameSocket {
@@ -27,7 +28,14 @@ impl FrameSocket {
             state: FrameSocketState::HANDSHAKE,
             key: Key::new(),
             client,
-            ns: None
+            ns: None,
+        }
+    }
+
+    pub fn process(&self, node: &Node) {
+        match node.description.as_str() {
+            "iq" => self.handle_qr(node),
+            _ => error!("Node not handled: {}", node.description)
         }
     }
 
@@ -36,7 +44,7 @@ impl FrameSocket {
         let header_length = constant::CONN_HEADER.len();
         
         if data_length >= constant::FRAME_MAX_SIZE {
-            println!("Frame too large got {}, max {}", data_length, constant::FRAME_MAX_SIZE);
+            panic!("Frame too large got {}, max {}", data_length, constant::FRAME_MAX_SIZE);
         }
 
         let mut frame = Vec::with_capacity(header_length + constant::FRAME_LENGTH_SIZE + data_length);
@@ -48,8 +56,8 @@ impl FrameSocket {
         frame.push(data_length as u8);
         frame.extend_from_slice(&data);
 
-        println!("Frame length: {}", frame.len());
-        println!("Frame: {:?}", frame);
+        // println!("Frame length: {}", frame.len());
+        // println!("Frame: {:?}", frame);
         self.handle.binary(frame).expect("Fail sending frame");
     }
 
@@ -181,7 +189,8 @@ impl ezsockets::ClientExt for FrameSocket {
             FrameSocketState::CONNECTED => {
                 let decrypted = self.ns.as_mut().unwrap().receive_encrypted_frame(&data);
                 let node = BinaryDecoder::new(decrypted).decode();
-                println!("Node: {}", node.to_xml());
+                info!("Node: {}", node.to_xml());
+                self.process(&node);
             }
         }
         Ok(())

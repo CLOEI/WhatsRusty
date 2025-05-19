@@ -21,6 +21,7 @@ x25519-dalek = "2.0.1"
 flate2 = "1.1.1"
 byteorder = "1"
 hex = "0.4.3"
+paris = { version = "1.5.15", features = ["timestamps", "macros", "no_logger"] }
 
 [build-dependencies]
 tonic-build = "0.13.1"
