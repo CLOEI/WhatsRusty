@@ -57,28 +57,28 @@ impl BinaryDecoder {
         let description = self.read_string();
         let attrs = self.read_attributes(size);
 
-        if size % 2 != 0 {
-            Node::new(description, attrs, None)
-        } else {
-            let content = self.read(false);
-            Node::new(description, attrs, Some(content))
+        let mut node = Node::new(description, attrs, None);
+        if size % 2 == 0 {
+            node.content = Some(self.read(false));
         }
+        node
     }
 
     fn read_size(&mut self, token: u8) -> usize {
         match token {
-            LIST_8 => self.reader.read_u8().unwrap() as usize,
-            LIST_16 => self.reader.read_u16::<BigEndian>().unwrap() as usize,
+            LIST_EMPTY => 0,
+            LIST_8 => self.reader.read_i8().unwrap() as usize,
+            LIST_16 => self.reader.read_i16::<BigEndian>().unwrap() as usize,
             _ => panic!("Invalid list token"),
         }
     }
 
     fn read_attributes(&mut self, size: usize) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        for _ in 0..(size - 1) / 2 {
+        for _ in 0..((size - 1) >> 1) {
             let key = self.read_string();
             let value = self.read(true);
-            map.insert(key.clone(), get_value_with_context(&key, value));
+            map.insert(key.clone(), value);
         }
         map
     }
@@ -119,7 +119,9 @@ impl BinaryDecoder {
                 self.read_binary(size, parse_bytes)
             }
             NIBBLE_8 => self.read_nibble(),
-            _ => self.read_string_from_token(tag),
+            _ => {
+                self.read_string_from_token(tag)
+            },
         }
     }
 
@@ -150,9 +152,8 @@ impl BinaryDecoder {
 
     fn read_jid_pair(&mut self) -> Value {
         let user = self.read_string();
-        println!("User: {}", user);
         let server = self.read_string();
-        println!("Server: {}", server);
+
         Value::Jid(JID {
             user: Some(user),
             server: Some(server),
