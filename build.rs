@@ -4,7 +4,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .out_dir("src/proto")
         .compile_protos(
             &["whatsapp.proto"],
-            &["proto"], 
+            &["proto"],
         ).unwrap();
     Ok(())
 }

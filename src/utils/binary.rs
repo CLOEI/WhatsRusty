@@ -3,7 +3,7 @@ use std::{collections::HashMap, io::{Cursor, Read}};
 use byteorder::{BigEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 
-use crate::{r#type::jid::JID, util::token::{DICTIONARY_0, DICTIONARY_3, DOUBLE_BYTE_TOKENS, SINGLE_BYTE_TOKENS}};
+use crate::{types::jid::JID, utils::token::{DICTIONARY_0, DICTIONARY_3, DOUBLE_BYTE_TOKENS, SINGLE_BYTE_TOKENS}};
 
 use super::token::{BINARY_20, BINARY_32, BINARY_8, HEX_8, JID_PAIR, LIST_16, LIST_8, LIST_EMPTY, NIBBLE_8};
 
@@ -19,7 +19,7 @@ pub enum Value {
 
 #[derive(Debug, Clone)]
 pub struct Node {
-    pub description: String,
+    pub tag: String,
     pub attributes: HashMap<String, Value>,
     pub content: Option<Value>,
 }
@@ -30,7 +30,7 @@ pub struct BinaryDecoder {
 
 impl Node {
     pub fn new(description: String, attributes: HashMap<String, Value>, content: Option<Value>) -> Self {
-        Node { description, attributes, content }
+        Node { tag: description, attributes, content }
     }
 }
 
@@ -183,7 +183,7 @@ impl BinaryDecoder {
         }
 
         let i = self.reader.read_u8().unwrap() as usize;
-        return Value::Str(DOUBLE_BYTE_TOKENS[tag as usize - DICTIONARY_0 as usize][i].to_string());
+        Value::Str(DOUBLE_BYTE_TOKENS[tag as usize - DICTIONARY_0 as usize][i].to_string())
     }
 }
 

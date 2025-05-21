@@ -14,15 +14,15 @@ impl Node {
         let content = self.content_string(level + 1);
 
         if content.is_empty() {
-            format!("{indent}<{}{} />", self.description, attr_str)
+            format!("{indent}<{}{} />", self.tag, attr_str)
         } else {
             let newline = if INDENT_XML { "\n" } else { "" };
-            let mut s = format!("{indent}<{}{}>{newline}", self.description, attr_str);
+            let mut s = format!("{indent}<{}{}>{newline}", self.tag, attr_str);
             for line in &content {
                 s.push_str(line);
                 s.push_str(newline);
             }
-            s.push_str(&format!("{indent}</{}>", self.description));
+            s.push_str(&format!("{indent}</{}>", self.tag));
             s
         }
     }

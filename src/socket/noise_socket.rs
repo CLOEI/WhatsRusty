@@ -1,10 +1,11 @@
 use aes_gcm::{aead::Aead, Aes256Gcm, Nonce};
+use aes_gcm::aead::Payload;
 use paris::error;
 
 pub struct NoiseSocket {
     pub write_key: Aes256Gcm,
     pub read_key: Aes256Gcm,
-    pub read_counter: u32,
+    pub read_counter: usize,
 }
 
 impl NoiseSocket {
@@ -23,7 +24,7 @@ impl NoiseSocket {
         let iv = Self::generate_iv(counter);
         let nonce = Nonce::from_slice(&iv);
 
-        match self.read_key.decrypt(nonce, aes_gcm::aead::Payload {
+        match self.read_key.decrypt(nonce, Payload {
             msg: ciphertext,
             aad: b"",
         }) {
@@ -37,7 +38,7 @@ impl NoiseSocket {
         }
     }
 
-    pub fn generate_iv(counter: u32) -> [u8; 12] {
+    pub fn generate_iv(counter: usize) -> [u8; 12] {
         let mut iv = [0u8; 12];
         iv[8] = (counter >> 24) as u8;
         iv[9] = (counter >> 16) as u8;

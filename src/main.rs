@@ -1,22 +1,24 @@
-use client::{connect, Client, Events};
+use crate::client::{connect, Events};
 
 mod proto;
-mod client;
-mod socket;
 mod constant;
-mod util;
+mod client;
+mod utils;
+mod socket;
 mod device;
-mod r#type;
+mod types;
 
-struct MyClient;
+struct MyClient {}
+
 impl Events for MyClient {
-    fn on_qr(&self, qr: String) {
-        println!("QR: {}", qr);
+    fn on_qr(&self, qr: &str) {
+        println!("QR Code: {}", qr);
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let client = connect(MyClient).await;
+    let client = connect(MyClient{}).await;
+
     loop {}
 }
