@@ -6,6 +6,7 @@ pub struct NoiseSocket {
     pub write_key: Aes256Gcm,
     pub read_key: Aes256Gcm,
     pub read_counter: usize,
+    pub write_counter: usize,
 }
 
 impl NoiseSocket {
@@ -13,7 +14,8 @@ impl NoiseSocket {
         Self {
             write_key,
             read_key,
-            read_counter: 0
+            read_counter: 0,
+            write_counter: 0
         }
     }
 
@@ -36,6 +38,14 @@ impl NoiseSocket {
                 panic!("Failed to decrypt frame");
             }
         }
+    }
+
+    pub fn make_frame(&mut self, plaintext: Vec<u8>) -> Vec<u8> {
+        let iv = Self::generate_iv(self.write_counter);
+        let nonce = Nonce::from_slice(&iv);
+        let cipher_text = self.write_key.encrypt(nonce, plaintext.as_slice());
+        self.write_counter += 1;
+        cipher_text.unwrap()
     }
 
     pub fn generate_iv(counter: usize) -> [u8; 12] {

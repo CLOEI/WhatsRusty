@@ -29,8 +29,8 @@ pub struct BinaryDecoder {
 }
 
 impl Node {
-    pub fn new(description: String, attributes: HashMap<String, Value>, content: Option<Value>) -> Self {
-        Node { tag: description, attributes, content }
+    pub fn new(tag: String, attributes: HashMap<String, Value>, content: Option<Value>) -> Self {
+        Node { tag, attributes, content }
     }
 }
 

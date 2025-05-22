@@ -7,6 +7,7 @@ mod utils;
 mod socket;
 mod device;
 mod types;
+mod request;
 
 struct MyClient {}
 

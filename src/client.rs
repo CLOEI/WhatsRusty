@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use paris::{error, info};
@@ -12,19 +13,22 @@ use crate::constant;
 use crate::device::Device;
 use crate::proto::whatsapp::handshake_message::{ClientFinish, ClientHello};
 use crate::proto::whatsapp::HandshakeMessage;
+use crate::request::InfoQuery;
 use crate::socket::frame_socket::{FrameSocket, FrameSocketState};
 use crate::socket::noise_socket::NoiseSocket;
+use crate::types::jid::JID;
 use crate::utils::decoder::{BinaryDecoder, Node};
 use crate::utils::gcm;
 use crate::utils::noise_handshake::NoiseHandShake;
 
 pub struct Client {
-    write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Message>,
-    fs: FrameSocket,
-    ns: Option<NoiseSocket>,
+    pub write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Message>,
+    pub fs: FrameSocket,
+    pub ns: Option<NoiseSocket>,
     pub unique_id: String,
     pub device: Device,
-    pub handle: Option<Box<dyn Events>>
+    pub handle: Option<Box<dyn Events>>,
+    pub id_counter: usize
 }
 
 impl Client {
@@ -35,8 +39,21 @@ impl Client {
         }
     }
 
-    pub fn keep_alive(&self) {
+    pub async fn keep_alive(&mut self) {
+        let mut rng = rand_core::OsRng;
 
+        loop {
+            let interval = rng.next_u64() % (constant::KEEPALIVE_INTERVAL_MAX.as_millis() - constant::KEEPALIVE_INTERVAL_MIN.as_millis()) as u64 + constant::KEEPALIVE_INTERVAL_MIN.as_millis() as u64;
+            let timeout = Duration::from_millis(interval);
+
+            tokio::time::sleep(timeout).await;
+            self.send_iq(InfoQuery {
+                namespace: Some("w:p".to_string()),
+                r#type: Some("get".to_string()),
+                to: Some(JID::new(None, None, None, None, Some("s.whatsapp.net".to_string()))),
+                ..Default::default()
+            }).await;
+        }
     }
 
     async fn do_handshake(&mut self, read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>) {
@@ -115,7 +132,8 @@ pub async fn connect<E: Events + 'static>(handle: E) -> Arc<Mutex<Client>> {
         ns: None,
         unique_id: format!("{}.{}-", unique_ids[0], unique_ids[1]),
         device: Device::new(),
-        handle: Some(Box::new(handle))
+        handle: Some(Box::new(handle)),
+        id_counter: 0
     }));
 
     {
