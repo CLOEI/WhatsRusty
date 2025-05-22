@@ -3,6 +3,7 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use paris::{error, info};
 use prost::Message;
+use rand_core::RngCore;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -13,7 +14,7 @@ use crate::proto::whatsapp::handshake_message::{ClientFinish, ClientHello};
 use crate::proto::whatsapp::HandshakeMessage;
 use crate::socket::frame_socket::{FrameSocket, FrameSocketState};
 use crate::socket::noise_socket::NoiseSocket;
-use crate::utils::binary::{BinaryDecoder, Node};
+use crate::utils::decoder::{BinaryDecoder, Node};
 use crate::utils::gcm;
 use crate::utils::noise_handshake::NoiseHandShake;
 
@@ -21,6 +22,7 @@ pub struct Client {
     write: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, tokio_tungstenite::tungstenite::Message>,
     fs: FrameSocket,
     ns: Option<NoiseSocket>,
+    pub unique_id: String,
     pub device: Device,
     pub handle: Option<Box<dyn Events>>
 }
@@ -31,6 +33,10 @@ impl Client {
             "iq" => self.handle_qr(node),
             _ => error!("Node not handled: {}", node.tag)
         }
+    }
+
+    pub fn keep_alive(&self) {
+
     }
 
     async fn do_handshake(&mut self, read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>) {
@@ -100,10 +106,14 @@ pub async fn connect<E: Events + 'static>(handle: E) -> Arc<Mutex<Client>> {
 
     let (write, mut read) = ws_stream.split();
 
-    let mut client = Arc::new(Mutex::new(Client {
+    let mut unique_ids = [0u8; 2];
+    rand_core::OsRng.fill_bytes(&mut unique_ids);
+
+    let client = Arc::new(Mutex::new(Client {
         write,
         fs: FrameSocket::new(),
         ns: None,
+        unique_id: format!("{}.{}-", unique_ids[0], unique_ids[1]),
         device: Device::new(),
         handle: Some(Box::new(handle))
     }));

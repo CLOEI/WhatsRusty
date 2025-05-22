@@ -1,4 +1,4 @@
-use super::binary::{Node, Value};
+use super::decoder::{Node, Value};
 
 const INDENT_XML: bool = false;
 const MAX_BYTES_TO_PRINT_AS_HEX: usize = 128;

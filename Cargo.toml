@@ -19,6 +19,7 @@ paris = { version = "1.5", features = ["timestamps", "macros", "no_logger"] }
 byteorder = "1.5.0"
 flate2 = "1.1.1"
 hex = "0.4.3"
+base64 = "0.22.1"
 
 [build-dependencies]
 tonic-build = "0.13.1"
