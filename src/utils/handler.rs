@@ -6,11 +6,14 @@ use super::decoder::{Node, Value};
 
 impl Client {
     pub fn handle_qr(&self, node: &Node) {
-        let child = node.content.as_ref().unwrap();
-        let Value::List(content) = child else { return };
-        match content[0].tag.as_str() {
+        let child = match node.content.as_ref() {
+            None => return,
+            Some(Value::List(content)) => content,
+            Some(_) => return
+        };
+        match child[0].tag.as_str() {
             "pair-device" => {
-                let Value::List(pair_device) = content[0].content.as_ref().unwrap() else { return };
+                let Value::List(pair_device) = child[0].content.as_ref().unwrap() else { return };
                 let mut codes = Vec::new();
                 for node in pair_device {
                     if node.tag != "ref" {
@@ -28,7 +31,7 @@ impl Client {
 
             }
             _ => {
-                panic!("Unknown node: {}", content[0].tag);
+                panic!("Unknown node: {}", child[0].tag);
             }
         }
     }

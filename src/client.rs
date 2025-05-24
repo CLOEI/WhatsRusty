@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::time::{Duration, Instant};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -6,6 +6,7 @@ use paris::{error, info};
 use prost::Message;
 use rand_core::RngCore;
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::{ClientRequestBuilder};
@@ -39,20 +40,25 @@ impl Client {
         }
     }
 
-    pub async fn keep_alive(&mut self) {
+    pub async fn keep_alive(client: Arc<Mutex<Client>>) {
         let mut rng = rand_core::OsRng;
-
+        info!("Keep alive started");
         loop {
-            let interval = rng.next_u64() % (constant::KEEPALIVE_INTERVAL_MAX.as_millis() - constant::KEEPALIVE_INTERVAL_MIN.as_millis()) as u64 + constant::KEEPALIVE_INTERVAL_MIN.as_millis() as u64;
-            let timeout = Duration::from_millis(interval);
+            let interval = rng.next_u64()
+                % (constant::KEEPALIVE_INTERVAL_MAX.as_millis() - constant::KEEPALIVE_INTERVAL_MIN.as_millis()) as u64
+                + constant::KEEPALIVE_INTERVAL_MIN.as_millis() as u64;
 
-            tokio::time::sleep(timeout).await;
-            self.send_iq(InfoQuery {
-                namespace: Some("w:p".to_string()),
-                r#type: Some("get".to_string()),
-                to: Some(JID::new(None, None, None, None, Some("s.whatsapp.net".to_string()))),
+            tokio::time::sleep(Duration::from_millis(interval)).await;
+
+            let iq = InfoQuery {
+                namespace: Some("w:p".into()),
+                r#type: Some("get".into()),
+                to: Some(JID::new(None, None, None, None, Some("s.whatsapp.net".into()))),
                 ..Default::default()
-            }).await;
+            };
+
+            let mut client = client.lock().await;
+            client.send_iq(iq).await;
         }
     }
 
@@ -137,7 +143,7 @@ pub async fn connect<E: Events + 'static>(handle: E) -> Arc<Mutex<Client>> {
     }));
 
     {
-        let mut client = client.lock().unwrap();
+        let mut client = client.lock().await;
         client.do_handshake(&mut read).await;
     }
 
@@ -151,14 +157,14 @@ pub async fn connect<E: Events + 'static>(handle: E) -> Arc<Mutex<Client>> {
             match message {
                 Ok(msg) => {
                     let data = {
-                        let mut client = client.lock().unwrap();
+                        let mut client = client.lock().await;
                         let data = client.fs.process_data(Vec::from(msg.into_data()));
                         client.ns.as_mut().unwrap().receive_encrypted_frame(&data)
                     };
                     let node = BinaryDecoder::new(data).decode();
                     info!("Received node: {}", node.to_xml());
                     {
-                        client.lock().unwrap().process(&node);
+                        client.lock().await.process(&node);
                     }
                 }
                 Err(e) => {
@@ -168,6 +174,8 @@ pub async fn connect<E: Events + 'static>(handle: E) -> Arc<Mutex<Client>> {
             }
         }
     });
+
+    tokio::spawn(Client::keep_alive(Arc::clone(&client)));
 
     client
 }
