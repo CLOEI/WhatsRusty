@@ -1,6 +1,6 @@
 use std::{collections::HashMap, io::Write};
 
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{BigEndian, LittleEndian, WriteBytesExt};
 
 use crate::types::jid::JID;
 
@@ -68,7 +68,28 @@ impl BinaryEncoder {
         match value {
             Value::Str(s) => self.write_string(s.clone()),
             Value::Jid(jid) => self.write_jid(&jid),
+            Value::Bytes(bytes) => self.write_bytes(bytes),
             _ => panic!("{:?} Not handled", value)
+        }
+    }
+
+    fn write_bytes(&mut self, bytes: &[u8]) {
+        self.write_byte_length(bytes.len());
+        self.buffer.write_all(bytes).unwrap();
+    }
+
+    fn write_byte_length(&mut self, length: usize) {
+        if length < 256 {
+            self.buffer.write_u8(token::BINARY_8).unwrap();
+            self.buffer.write_u8(length as u8).unwrap();
+        } else if length < (1 << 20) {
+            self.buffer.write_u8(token::BINARY_20).unwrap();
+            self.buffer.write_all(&[(length >> 16) as u8 & 0x0F, (length >> 8) as u8 & 0xFF, length as u8 & 0xFF]).unwrap();
+        } else if length < i32::MAX as usize {
+            self.buffer.write_u8(token::BINARY_32).unwrap();
+            self.buffer.write_i32::<BigEndian>(length as i32).unwrap();
+        } else {
+            panic!("length is too large: {}", length);
         }
     }
 
@@ -137,23 +158,6 @@ impl BinaryEncoder {
                     }
                 }
             }
-        }
-    }
-
-    fn write_byte_length(&mut self, length: usize) {
-        if length < 256 {
-            self.buffer.write_u8(token::BINARY_8).unwrap();
-            self.buffer.write_u8(length as u8).unwrap();
-        } else if length < (1 << 20) {
-            self.buffer.write_u8(token::BINARY_20).unwrap();
-            self.buffer.write_u8(((length >> 16) & 0x0F) as u8).unwrap();
-            self.buffer.write_u8((length >> 8) as u8).unwrap();
-            self.buffer.write_u8(length as u8).unwrap();
-        } else if length < i32::MAX as usize {
-            self.buffer.write_u8(token::BINARY_32).unwrap();
-            self.buffer.write_i32::<LittleEndian>(length as i32).unwrap();
-        } else {
-            panic!("length is too large: {}", length);
         }
     }
 

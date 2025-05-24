@@ -41,8 +41,8 @@ impl Client {
     }
 
     pub fn generate_request_id(&mut self) -> String {
-        let id = format!("{}{}", self.unique_id, self.id_counter);
         self.id_counter += 1;
+        let id = format!("{}{}", self.unique_id, self.id_counter);
         id
     }
 }

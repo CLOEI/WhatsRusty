@@ -33,9 +33,9 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn process(&self, node: &Node) {
+    pub async fn process(&mut self, node: &Node) {
         match node.tag.as_str() {
-            "iq" => self.handle_qr(node),
+            "iq" => self.handle_qr(node).await,
             _ => error!("Node not handled: {}", node.tag)
         }
     }
@@ -164,7 +164,7 @@ pub async fn connect<E: Events + 'static>(handle: E) -> Arc<Mutex<Client>> {
                     let node = BinaryDecoder::new(data).decode();
                     info!("Received node: {}", node.to_xml());
                     {
-                        client.lock().await.process(&node);
+                        client.lock().await.process(&node).await;
                     }
                 }
                 Err(e) => {
